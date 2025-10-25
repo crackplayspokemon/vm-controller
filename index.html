@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VM Input Controller</title>
+<style>
+  body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+  h1 { margin-bottom: 20px; }
+  button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+  #status { margin-top: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>VM Input Controller</h1>
+
+<p>Use WASD for directions, Tab for select, Esc for start, Left/Right click for A/B.</p>
+
+<div id="status">Connecting...</div>
+
+<script>
+const WS_URL = "ws://172.24.31.116:25565"; // <-- Replace with your server IP
+const AUTH_TOKEN = "1"; // <-- Replace with your AUTH_TOKEN
+let ws;
+let connected = false;
+
+// Map keys to VM commands
+const KEY_MAP = {
+    'w': 'up',
+    'a': 'left',
+    's': 'down',
+    'd': 'right',
+    'tab': 'tab',
+    'escape': 'esc'
+};
+
+const MOUSE_MAP = {
+    0: 'a',  // left
+    2: 'b'   // right
+};
+
+// Connect and authenticate
+function connect() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+        document.getElementById('status').innerText = "Connected. Authenticating...";
+        ws.send(JSON.stringify({type: "auth", token: AUTH_TOKEN}));
+    };
+
+    ws.onmessage = (msg) => {
+        const data = JSON.parse(msg.data);
+        if (data.ok) {
+            connected = true;
+            document.getElementById('status').innerText = "Authenticated! Ready to send input.";
+        } else if (data.error) {
+            document.getElementById('status').innerText = "Error: " + data.error;
+        } else if (data.status) {
+            console.log("Command executed:", data.cmd);
+        }
+    };
+
+    ws.onclose = () => {
+        connected = false;
+        document.getElementById('status').innerText = "Disconnected. Retrying in 3s...";
+        setTimeout(connect, 3000);
+    };
+
+    ws.onerror = (e) => {
+        console.error("WebSocket error", e);
+    };
+}
+
+// Send command helper
+function sendCommand(cmd, hold=0.2) {
+    if (!connected) {
+        console.warn("Cannot send, not connected or no control");
+        return;
+    }
+    ws.send(JSON.stringify({type: "tap", cmd: cmd, hold: hold}));
+}
+
+// Keyboard listener
+document.addEventListener('keydown', (e) => {
+    const key = KEY_MAP[e.key.toLowerCase()];
+    if (key) sendCommand(key);
+});
+
+// Mouse listener
+document.addEventListener('mousedown', (e) => {
+    const cmd = MOUSE_MAP[e.button];
+    if (cmd) sendCommand(cmd);
+});
+
+// Start
+connect();
+</script>
+</body>
+</html>
